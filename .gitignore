@@ -1,0 +1,12 @@
+# build artifacts
+*.o
+*.so
+*.a
+
+build/
+dist/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyd
