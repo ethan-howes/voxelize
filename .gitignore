@@ -13,3 +13,4 @@ __pycache__/
 
 # KITTI data
 /data
+scripts/kitti_analysis
