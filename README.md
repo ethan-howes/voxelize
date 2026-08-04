@@ -1,3 +1,6 @@
+![CPU Generated Birds Eye View from KITTI Data](docs/assets/cpu-generated-bev-from-kitti.png)
+> CPU Generated Birds Eye View from KITTI Data
+
 # voxelize
 
 A CUDA C++ kernel that converts raw LiDAR point clouds into the pillar-voxel representation consumed by 3D object detection networks.
