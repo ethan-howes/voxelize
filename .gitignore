@@ -12,4 +12,4 @@ __pycache__/
 *.pyd
 
 # KITTI data
-data/
+/data
