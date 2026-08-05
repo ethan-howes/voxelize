@@ -1,8 +1,16 @@
-// voxelize.cu
-//
-// Voxelize takes an input of N points shaped as (N, 4). They are then turned
-// into pillars in an x-y grid since the z dimension is not needed for cars.
-// The pillars are indexed into a grid and placed into bins using
-// floor((x - x_min) / voxel_size). Outputs are a dense tensor of shape
-// (D, P, N) representing features, max pillars, and max points per pillar.
-// Overflow points are randomly sampled; underflow pillars are zero padded.
+#include "voxelize.h"
+#include <cuda_runtime.h>
+#include <stdio.h>
+
+
+__device__ int compute_grid_idx(float x, float y, float x_min, float y_min, float vx, float vy, int grid_x, int grid_y) {
+    if (isinf(x) || isnan(x) || isinf(y) || isnan(y)) return -1;
+
+    int cx = (int)floorf((x - x_min) / vx);
+    int cy = (int)floorf((y - y_min) / vy);
+
+    if (cx < 0 || cx >= grid_x) return -1;
+    if (cy < 0 || cy >= grid_y) return -1;
+
+    return cy * grid_x + cx;
+}
