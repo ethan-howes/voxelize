@@ -1,6 +1,5 @@
 #include "voxelize.h"
 #include <cuda_runtime.h>
-#include <stdio.h>
 
 
 __device__ int compute_grid_idx(float x, float y, float x_min, float y_min, float vx, float vy, int grid_x, int grid_y) {
