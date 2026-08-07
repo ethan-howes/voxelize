@@ -13,3 +13,22 @@ __device__ int compute_grid_idx(float x, float y, float x_min, float y_min, floa
 
     return cy * grid_x + cx;
 }
+
+
+__device__ int hash_insert(int* hash_table, int table_size, int voxel_id) {
+    int h = ((voxel_id % table_size) + table_size) % table_size;
+
+    while (true) {
+	int old = atomicCAS(&hash_table[h], -1, voxel_id);
+
+	if (old == -1) {
+	    return h;
+	}
+
+	if (old == voxel_id) {
+	    return h;
+	}
+
+	h = (h + 1) % table_size;
+    }
+}
