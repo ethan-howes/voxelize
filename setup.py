@@ -1,9 +1,10 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 from torch.utils.cpp_extension import CUDAExtension, BuildExtension
 
 setup(
     name='voxelize',
-    ext_moduels=[
+    packages=['voxelize'],
+    ext_modules=[
         CUDAExtension(
             name='voxelize_cuda',
             sources=[
