@@ -13,7 +13,7 @@ setup(
             ],
             extra_compile_args={
                 'cxx': ['-03'],
-                'nvcc': ['-03', '--use_fast_math'],
+                'nvcc': ['--use_fast_math'],
             }
         )
     ],
