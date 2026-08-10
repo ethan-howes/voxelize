@@ -1,6 +1,7 @@
 #include "voxelize.h"
 #include <cuda_runtime.h>
-#include <stdlib.h>
+#include <cstdlib>
+#include <cstdio>
 
 #define HASH_TABLE_SIZE(max_voxels) (2 * (max_voxels))
 
