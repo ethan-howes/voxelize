@@ -12,7 +12,7 @@ setup(
                 'csrc/voxelize.cu',
             ],
             extra_compile_args={
-                'cxx': ['-03'],
+                'cxx': [],
                 'nvcc': ['--use_fast_math'],
             }
         )
