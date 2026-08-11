@@ -76,7 +76,8 @@ __global__ void voxelize_kernel(
 	}
 	if (old == voxel_id) {
 	    // if the pillar exists then wait for the slot to be written
-	    while ((slot  = hash_values[h]) == -1) {}
+	    volatile int* hv = (volatile int*)hash_values;
+	    while ((slot = hv[h]) == -1) {}
 	    break;
 	}
 	h = (h + 1) % table_size;
