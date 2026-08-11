@@ -63,9 +63,9 @@ __global__ void voxelize_kernel(
 	if (old == -1) {
 	    int cy = voxel_id / grid_x;
 	    int cx = voxel_id % grid_x;
-	    coordinates[slot * 3 + 0] = 0;
-	    coordinates[slot * 3 + 1] = cy;
-	    coordinates[slot * 3 + 2] = cx;
+	    coordinates[h * 3 + 0] = 0;
+	    coordinates[h * 3 + 1] = cy;
+	    coordinates[h * 3 + 2] = cx;
 	    break;
 	}
 	if (old == voxel_id) break;
