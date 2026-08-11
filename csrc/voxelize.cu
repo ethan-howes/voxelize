@@ -3,7 +3,7 @@
 #include <cstdlib>
 #include <cstdio>
 
-#define HASH_TABLE_SIZE(max_voxels) (2 * (max_voxels))
+#define HASH_TABLE_SIZE(max_voxels) (4 * (max_voxels))
 
 #define CUDA_CHECK(call) do { \
     cudaError_t _e = (call); \
