@@ -65,10 +65,7 @@ __global__ void voxelize_kernel(
 
 	if (old == -1) {
 	    slot = atomicAdd(voxel_count, 1);
-	    if (slot >= max_voxels) {
-		hash_keys[h] = -1;
-		return;
-	    }
+	    if (slot >= max_voxels) return;
 	    int cy = voxel_id / grid_x;
 	    int cx = voxel_id % grid_x;
 	    coordinates[slot * 3 + 0] = 0;
@@ -78,21 +75,17 @@ __global__ void voxelize_kernel(
 	    hash_values[h] = slot;
 	    break;
 	}
+
 	if (old == voxel_id) {
-	    // if the pillar exists then wait for the slot to be written
-	    volatile int* hv = (volatile int*)hash_values;
-	    while ((slot = hv[h]) == -1) {}
+	    slot = -1;
+	    for (int attemp = 0; attempt < 1000000; attempt ++) {
+		slot = hash_values[h];
+		if (slot != -1) break;
+	    }
+	    if (slot == -1) return;
 	    break;
 	}
-	h = (h + 1) % table_size;
-    }
-
-    int pt_idx = atomicAdd(&num_points_per_voxel[slot], 1);
-    if (pt_idx >= max_points) return;
-
-    for (int c = 0; c < C; c++) {
-	voxels[slot * max_points * C + pt_idx * C + c] = points[idx * C + c];
-    }
+    h = (h + 1) % table_size;
 }
 
 
