@@ -22,7 +22,7 @@ def generate_points(n):
     return points
 
 
-def time_cpu(points, n_iter=100):
+def time_cpu(points, n_iter=10):
     times = []
 
     for i in range(n_iter):
