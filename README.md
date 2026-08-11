@@ -9,13 +9,13 @@ A CUDA C++ kernel that converts raw LiDAR point clouds into the pillar-voxel rep
 
 ## Background
 
-This project takes point clouds and turns them into 3D "pillars" in a BEV grid. This allows for 3D space to be processed by a normal CNN the same as a 2D image would be.
+This project takes point clouds and turns them into 3D pillars in a BEV grid. This allows for 3D space to be processed by a normal CNN the same as a 2D image would be.
 
 ---
 
 ## Evaluation
 
-**1. Benchmark table** comparing this kernel against OpenPCDet's `voxel_generator` at four point cloud densities on an RTX 1060 (Pascal sm_61):
+**1. Benchmark table** comparing this kernel against OpenPCDet's `voxel_generator` at four point cloud densities on an RTX 1060:
 
 | Points | This kernel (ms ± σ) | OpenPCDet (ms ± σ) | Speedup |
 |--------|----------------------|--------------------|---------|
@@ -44,8 +44,6 @@ voxelize/
 │   ├── benchmark.py
 │   ├── profile_kernel.py
 │   └── baseline.json
-├── profiles/
-│   └── ncu_analysis.md
 ├── scripts/
 │   └── explore_kitti.py
 ├── .github/
@@ -53,7 +51,6 @@ voxelize/
 │       └── ci.yml
 ├── setup.py
 ├── Makefile
-├── IMPLEMENTATION.md
 └── README.md
 ```
 
@@ -61,7 +58,7 @@ voxelize/
 
 ## Hardware Requirements
 
-This repo runs entirely on an RTX 1060 3GB. Only kernel execution and benchmarking happens here, no model training.
+This runs entirely on an RTX 1060 3GB. Only kernel execution and benchmarking is done here, no model training.
 
 | Resource | Requirement |
 |----------|-------------|
