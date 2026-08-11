@@ -1,13 +1,15 @@
 import numpy as np
 import time
+import torch
 import json
 from voxelize.cpu_reference import voxelize_cpu
+from voxelize import voxelize
 
 
-voxel_size  = [0.16, 0.16, 4.0]
+voxel_size = [0.16, 0.16, 4.0]
 coors_range = [0, -39.68, -3, 69.12, 39.68, 1]
-max_points  = 32
-max_voxels  = 20000
+max_points = 32
+max_voxels = 20000
 
 
 def generate_points(n):
@@ -72,10 +74,22 @@ def main():
     results = {}
 
     for n in point_counts:
-        points = generate_points(n)
-        mean, std = time_cpu(points)
-        results[n] = {'mean_ms': round(mean, 3), 'std_ms': round(std, 3)}
-        print(f"  {n:>7} points: {mean:.2f} ± {std:.2f} ms")
+        points_cpu = generate_points(n)
+        points_gpu = generate_points_gpu(n)
+
+        cpu_mean, cpu_std = time_cpu(points_cpu)
+        gpu_mean, gpu_std = time_cuda(voxelize, [points_gpu, voxel_size, coors_range])
+
+        speedup = cpu_mean / gpu_mean
+
+        results[n] = {
+            'cpu_mean_ms': round(cpu_mean, 3),
+            'cpu_std_ms': round(cpu_std, 3),
+            'cuda_mean_ms': round(gpu_mean, 3),
+            'cuda_std_ms': round(gpu_std, 3),
+            'speedup': round(speedup, 2),
+        } 
+        print(f"{n:>7} points: {cpu_mean:>8.2f} ± {cpu_std:.2f} | {gpu_mean:>8.2f} ± {gpu_std:.2f} | {speedup:>6.1f}x")
 
     return results
 
