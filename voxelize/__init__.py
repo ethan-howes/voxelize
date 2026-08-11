@@ -28,5 +28,6 @@ def voxelize(points, voxel_size, coors_range, max_points=32, max_voxels=20000):
             max_points, max_voxels
         )
 
+    num_points_per_voxel = torch.clamp(num_points_per_voxel, max=max_points)
     n = voxel_count.item()
     return voxels[:n], coordinates[:n], num_points_per_voxel[:n]
