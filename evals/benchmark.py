@@ -57,6 +57,16 @@ def time_cuda(fn, args, n_warmup=20, n_iter=200):
     return times_mean, times_std
 
 
+def generate_points_gpu(n):
+    torch.manual_seed(42)
+    points = torch.zeros((n, 4), dtype=torch.float32)
+    points[:, 0] = torch.rand(n) * 69.12
+    points[:, 1] = torch.rand(n) * 79.36 - 39.68
+    points[:, 2] = torch.rand(n) * 4.0 - 3.0
+    points[:, 3] = torch.rand(n)
+    return points.cuda()
+
+
 def main():
     point_counts = [25000, 50000, 100000, 130000]
     results = {}
