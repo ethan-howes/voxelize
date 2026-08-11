@@ -65,13 +65,17 @@ __global__ void voxelize_kernel(
 
 	if (old == -1) {
 	    slot = atomicAdd(voxel_count, 1);
-	    if (slot >= max_voxels) return;
-	    hash_values[h] = slot;
+	    if (slot >= max_voxels) {
+		hash_keys[h] = -1;
+		return;
+	    }
 	    int cy = voxel_id / grid_x;
 	    int cx = voxel_id % grid_x;
 	    coordinates[slot * 3 + 0] = 0;
 	    coordinates[slot * 3 + 1] = cy;
 	    coordinates[slot * 3 + 2] = cx;
+	    __threadfence();
+	    hash_values[h] = slot;
 	    break;
 	}
 	if (old == voxel_id) {
