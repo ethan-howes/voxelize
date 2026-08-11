@@ -33,6 +33,30 @@ def time_cpu(points, n_iter=100):
     return times.mean(), times.std()
 
 
+def time_cuda(fn, args, n_warmup=20, n_iter=200):
+    for _ in range(n_warmup):
+        fn(*args)
+
+    times = []
+
+    time_start = torch.cuda.Event(enable_timing = True)
+    time_end = torch.cuda.Event(enable_timing = True)
+
+    for _ in range(n_iter):
+        time_start.record()
+        fn(*args)
+        time_end.record()
+
+        torch.cuda.synchronize()
+        times.append(time_start.elapsed_time(time_end))
+
+    nptimes = np.array(times)
+    times_mean = np.mean(nptimes)
+    times_std = np.std(nptimes)
+
+    return times_mean, times_std
+
+
 def main():
     point_counts = [25000, 50000, 100000, 130000]
     results = {}
