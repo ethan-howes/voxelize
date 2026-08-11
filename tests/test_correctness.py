@@ -1,11 +1,16 @@
 import pytest
 import numpy as np
 import os
+import torch
 from voxelize.cpu_reference import voxelize_cpu
+from voxelize import voxelize
 
 
-# in case kitti data lives in another dir
 KITTI_DIR = os.environ.get('KITTI_DIR', 'data/kitti/training/velodyne')
+VOXEL_SIZE  = [0.16, 0.16, 4.0]
+COORS_RANGE = [0, -39.68, -3, 69.12, 39.68, 1]
+MAX_POINTS  = 32
+MAX_VOXELS  = 20000
 
 
 @pytest.fixture(params=list(range(5)))
@@ -16,19 +21,15 @@ def kitti_frame(request):
     return points
 
 
-VOXEL_SIZE  = [0.16, 0.16, 4.0]
-COORS_RANGE = [0, -39.68, -3, 69.12, 39.68, 1]
-MAX_POINTS  = 32
-MAX_VOXELS  = 20000
+def sort_key(c):
+    return c[:, 0] * 100000000 + c[:, 1] * 10000 + c[:, 2]
 
 
 def test_voxelize_cpu_on_kitti(kitti_frame):
     points = kitti_frame
     voxels, coordinates, num_points_per_voxel = voxelize_cpu(points, VOXEL_SIZE, COORS_RANGE, MAX_POINTS, MAX_VOXELS)
 
-    sort_keys = (coordinates[:, 0] * 10000 * 10000 + coordinates[:, 1] * 10000 + coordinates[:, 2])
-    sort_order = np.argsort(sort_keys)
-
+    sort_order = np.argsort(sort_key(coordinates))
     sorted_coords  = coordinates[sort_order]
     sorted_npoints = num_points_per_voxel[sort_order]
 
@@ -43,7 +44,37 @@ def test_voxelize_cpu_on_kitti(kitti_frame):
     assert np.all(sorted_coords[:, 1] >= 0), "Negative y index"
     assert np.all(sorted_coords[:, 2] >= 0), "Negative x index"
 
-    # need cuda section here
+
+def test_voxelize_cuda_vs_cpu(kitti_frame):
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA not available")
+
+    points_np  = kitti_frame
+    points_gpu = torch.from_numpy(points_np).cuda()
+
+    _, coords_cpu, npts_cpu = voxelize_cpu(points_np, VOXEL_SIZE, COORS_RANGE, MAX_POINTS, MAX_VOXELS)
+    _, coords_cuda, npts_cuda = voxelize(points_gpu, VOXEL_SIZE, COORS_RANGE)
+
+    coords_cuda_np = coords_cuda.cpu().numpy()
+    npts_cuda_np   = npts_cuda.cpu().numpy()
+
+    cpu_set  = set(map(tuple, coords_cpu.tolist()))
+    cuda_set = set(map(tuple, coords_cuda_np.tolist()))
+
+    common_cpu_mask  = np.array([tuple(c) in cuda_set for c in coords_cpu])
+    common_cuda_mask = np.array([tuple(c) in cpu_set  for c in coords_cuda_np])
+
+    npts_cpu_common  = npts_cpu[common_cpu_mask]
+    npts_cuda_common = npts_cuda_np[common_cuda_mask]
+
+    sort_cpu  = np.argsort(sort_key(coords_cpu[common_cpu_mask]))
+    sort_cuda = np.argsort(sort_key(coords_cuda_np[common_cuda_mask]))
+
+    boundary_diff = len(cpu_set - cuda_set)
+    npts_close    = np.all(np.abs(npts_cpu_common[sort_cpu].astype(int) - npts_cuda_common[sort_cuda].astype(int)) <= 2)
+
+    assert boundary_diff <= 5, f"Too many boundary pillar disagreements: {boundary_diff}"
+    assert npts_close, "Point counts differ by more than 2 for common pillars"
 
 
 # point exactly on x_max should be excluded
