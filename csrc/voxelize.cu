@@ -1,7 +1,12 @@
-#include "voxelize.h"
-#include <cuda_runtime.h>
-#include <cstdlib>
 #include <cstdio>
+#include <cstdlib>
+#include <cuda_runtime.h>
+#include <thrust/copy.h>
+#include <thrust/device_ptr.h>
+#include <thrust/device_vector.h>
+#include <thrust/execution_policy.h>
+#include <thrust/iterator/counting_iterator.h>
+#include "voxelize.h"
 
 #define HASH_TABLE_SIZE(max_voxels) (4 * (max_voxels))
 
@@ -33,9 +38,7 @@ __global__ void voxelize_kernel(
 	float* voxels,
 	int* coordinates,
 	int* num_points_per_voxel,
-	int* voxel_count,
 	int* hash_keys,
-	int* hash_values,
 	int N, int C,
 	float vx, float vy, float vz,
 	float x_min, float y_min, float z_min,
@@ -43,7 +46,7 @@ __global__ void voxelize_kernel(
 	int grid_x, int grid_y, int grid_z,
 	int max_points, int max_voxels) {
 
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int idx = blockIdx.x * blockDim.x * threadIdx.x;
     if (idx >= N) return;
 
     // binning points
@@ -59,33 +62,53 @@ __global__ void voxelize_kernel(
     int table_size = HASH_TABLE_SIZE(max_voxels);
     int h = ((voxel_id % table_size) + table_size) % table_size;
 
-    int slot = -1;
     while (true) {
 	int old = atomicCAS(&hash_keys[h], -1, voxel_id);
 
 	if (old == -1) {
-	    slot = atomicAdd(voxel_count, 1);
-	    if (slot >= max_voxels) return;
 	    int cy = voxel_id / grid_x;
 	    int cx = voxel_id % grid_x;
-	    coordinates[slot * 3 + 0] = 0;
-	    coordinates[slot * 3 + 1] = cy;
-	    coordinates[slot * 3 + 2] = cx;
-	    __threadfence();
-	    hash_values[h] = slot;
+	    coordinates[h * 3 + 0] = 0;
+	    coordinates[h * 3 + 1] = cy;
+	    coordinates[h * 3 + 2] = cx;
 	    break;
 	}
+	if (old == voxel_id) break;
+	h = (h + 1) % table_size;
+    }
+    int pt_idx = atomicAdd(&num_points_per_voxel[h], 1);
+    if (pt_idx >= max_points) return;
+    for (int c = 0; c < C; c++) {
+        voxels[h * max_points * C + pt_idx * C + c] = points[idx * C + c];
+    }
+}
 
-	if (old == voxel_id) {
-	    slot = -1;
-	    for (int attemp = 0; attempt < 1000000; attempt ++) {
-		slot = hash_values[h];
-		if (slot != -1) break;
-	    }
-	    if (slot == -1) return;
-	    break;
-	}
-    h = (h + 1) % table_size;
+
+__global__ void compact_kernel(
+    const float* voxels_large,
+    const int* coords_large,
+    const int* npts_large,
+    float* voxels_out,
+    int* coords_out,
+    int* npts_out,
+    const int* occupied_indices,
+    int n_occupied,
+    int max_points, int C
+) {
+    int i = blockIdx.x * blockDim.x * threadIdx.x;
+    if (i >= n_occupied) return;
+
+    int slot = occupied_indices[i];
+
+    coords_out[i * 3 + 0] = coords_large[slot * 3 + 0];
+    coords_out[i * 3 + 1] = coords_large[slot * 3 + 1];
+    coords_out[i * 3 + 2] = coords_large[slot * 3 + 2];
+
+    npts_out[i] = npts_large[slot];
+
+    for (int j = 0; j < max_points * C; j++) {
+	voxels_out[i * max_points * C + j] = voxels_large[slot * max_points * C + j];
+    }
 }
 
 
@@ -104,23 +127,57 @@ void voxelize_launcher(
 ) {
     int table_size = HASH_TABLE_SIZE(max_voxels);
 
-    int* hash_keys;
-    int* hash_values;
+    int*   hash_keys;
+    float* voxels_large;
+    int*   coords_large;
+    int*   npts_large;
 
     CUDA_CHECK(cudaMalloc(&hash_keys, table_size * sizeof(int)));
-    CUDA_CHECK(cudaMalloc(&hash_values, table_size * sizeof(int)));
+    CUDA_CHECK(cudaMalloc(&voxels_large, table_size * max_points * C * sizeof(float)));
+    CUDA_CHECK(cudaMalloc(&coords_large, table_size * 3 * sizeof(int)));
+    CUDA_CHECK(cudaMalloc(&npts_large, table_size * sizeof(int)));
 
     CUDA_CHECK(cudaMemset(hash_keys, 0xFF, table_size * sizeof(int)));
-    CUDA_CHECK(cudaMemset(hash_values, 0xFF, table_size * sizeof(int)));
+    CUDA_CHECK(cudaMemset(voxels_large, 0, table_size * max_points * C * sizeof(float)));
+    CUDA_CHECK(cudaMemset(coords_large, 0, table_size * 3 * sizeof(int)));
+    CUDA_CHECK(cudaMemset(npts_large, 0, table_size * sizeof(int)));
 
     int threads = 256;
     int blocks = (N + threads - 1) / threads;
 
-    voxelize_kernel<<<blocks, threads>>>(points, voxels, coordinates, num_points_per_voxel, voxel_count, hash_keys, hash_values, N, C, vx, vy, vz, x_min, y_min, z_min, x_max, y_max, z_max, grid_x, grid_y, grid_z, max_points, max_voxels);
+    voxelize_kernel<<<blocks, threads>>>(points, voxels_large, coords_large, npts_large, hash_keys, N, C, vx, vy, vz, x_min, y_min, z_min, x_max, y_max, z_max, grid_x, grid_y, grid_z, max_points, max_voxels);
 
     CUDA_CHECK(cudaGetLastError());
     CUDA_CHECK(cudaDeviceSynchronize());
 
-    CUDA_CHECK(cudaFree(hash_keys));
-    CUDA_CHECK(cudaFree(hash_values));
+    // find occupied slot
+    thrust::device_ptr<int> hash_keys_ptr(hash_keys);
+    thrust::device_vector<int> occupied_indices(table_size);
+
+    auto end_it = thrust::copy_if(
+        thrust::device,
+        thrust::counting_iterator<int>(0),
+        thrust::counting_iterator<int>(table_size),
+        hash_keys_ptr,
+        occupied_indices.begin(),
+        [] __device__ (int k) { return k != -1; }
+    );
+
+    int n_occupied = end_it - occupied_indices.begin();
+    if (n_occupied > max_voxels) n_occupied = max_voxels;
+
+    // copy data back
+    int comp_blocks = (n_occupied + 255) / 256;
+    if (comp_blocks > 0) {
+        compact_kernel<<<comp_blocks, 256>>>(
+            voxels_large, coords_large, npts_large,
+            voxels, coordinates, num_points_per_voxel,
+            thrust::raw_pointer_cast(occupied_indices.data()),
+            n_occupied, max_points, C
+        );
+        CUDA_CHECK(cudaGetLastError());
+        CUDA_CHECK(cudaDeviceSynchronize());
+    }
+
+    CUDA_CHECK(cudaMemcpy(voxel_count, &n_occupied, sizeof(int), cudaMemcpyHostToDevice));
 }
