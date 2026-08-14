@@ -8,7 +8,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include "voxelize.h"
 
-#define HASH_TABLE_SIZE(max_voxels) (4 * (max_voxels))
+#define HASH_TABLE_SIZE(max_voxels) (8 * (max_voxels))
 
 #define CUDA_CHECK(call) do { \
     cudaError_t _e = (call); \
