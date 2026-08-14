@@ -80,6 +80,10 @@ def main():
         cpu_mean, cpu_std = time_cpu(points_cpu)
         gpu_mean, gpu_std = time_cuda(voxelize, [points_gpu, voxel_size, coors_range])
 
+        del points_gpu
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
+
         speedup = cpu_mean / gpu_mean
 
         results[n] = {
