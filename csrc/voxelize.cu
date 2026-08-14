@@ -46,7 +46,7 @@ __global__ void voxelize_kernel(
 	int grid_x, int grid_y, int grid_z,
 	int max_points, int max_voxels) {
 
-    int idx = blockIdx.x * blockDim.x * threadIdx.x;
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= N) return;
 
     // binning points
@@ -95,7 +95,7 @@ __global__ void compact_kernel(
     int n_occupied,
     int max_points, int C
 ) {
-    int i = blockIdx.x * blockDim.x * threadIdx.x;
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= n_occupied) return;
 
     int slot = occupied_indices[i];
@@ -180,4 +180,9 @@ void voxelize_launcher(
     }
 
     CUDA_CHECK(cudaMemcpy(voxel_count, &n_occupied, sizeof(int), cudaMemcpyHostToDevice));
+
+    CUDA_CHECK(cudaFree(hash_keys));
+    CUDA_CHECK(cudaFree(voxels_large));
+    CUDA_CHECK(cudaFree(coords_large));
+    CUDA_CHECK(cudaFree(npts_large));
 }
