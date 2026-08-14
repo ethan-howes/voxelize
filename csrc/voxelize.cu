@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <cuda_runtime.h>
 #include <thrust/copy.h>
+#include <thrust/device_ptr.h>
 #include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -45,7 +46,7 @@ __global__ void voxelize_kernel(
 	int grid_x, int grid_y, int grid_z,
 	int max_points, int max_voxels) {
 
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int idx = blockIdx.x * blockDim.x * threadIdx.x;
     if (idx >= N) return;
 
     // binning points
@@ -149,39 +150,34 @@ void voxelize_launcher(
     CUDA_CHECK(cudaGetLastError());
     CUDA_CHECK(cudaDeviceSynchronize());
 
-    int* hash_keys_cpu = (int*)malloc(table_size * sizeof(int));
-    CUDA_CHECK(cudaMemcpy(hash_keys_cpu, hash_keys, table_size * sizeof(int), cudaMemcpyDeviceToHost));
+    // find occupied slot
+    thrust::device_ptr<int> hash_keys_ptr(hash_keys);
+    thrust::device_vector<int> occupied_indices(table_size);
 
-    int n_occupied = 0;
-    for (int i = 0; i < table_size && n_occupied < max_voxels; i++) {
-	if (hash_keys_cpu[i] != -1) {
-            // voxel
-            CUDA_CHECK(cudaMemcpy(
-                voxels + n_occupied * max_points * C,
-                voxels_large + i * max_points * C,
-                max_points * C * sizeof(float),
-                cudaMemcpyDeviceToDevice));
-            // coordinates
-            CUDA_CHECK(cudaMemcpy(
-                coordinates + n_occupied * 3,
-                coords_large + i * 3,
-                3 * sizeof(int),
-                cudaMemcpyDeviceToDevice));
-            // point counts
-            CUDA_CHECK(cudaMemcpy(
-                num_points_per_voxel + n_occupied,
-                npts_large + i,
-                sizeof(int),
-                cudaMemcpyDeviceToDevice));
-            n_occupied++;
-        }
+    auto end_it = thrust::copy_if(
+        thrust::device,
+        thrust::counting_iterator<int>(0),
+        thrust::counting_iterator<int>(table_size),
+        hash_keys_ptr,
+        occupied_indices.begin(),
+        [] __device__ (int k) { return k != -1; }
+    );
+
+    int n_occupied = end_it - occupied_indices.begin();
+    if (n_occupied > max_voxels) n_occupied = max_voxels;
+
+    // copy data back
+    int comp_blocks = (n_occupied + 255) / 256;
+    if (comp_blocks > 0) {
+        compact_kernel<<<comp_blocks, 256>>>(
+            voxels_large, coords_large, npts_large,
+            voxels, coordinates, num_points_per_voxel,
+            thrust::raw_pointer_cast(occupied_indices.data()),
+            n_occupied, max_points, C
+        );
+        CUDA_CHECK(cudaGetLastError());
+        CUDA_CHECK(cudaDeviceSynchronize());
     }
 
     CUDA_CHECK(cudaMemcpy(voxel_count, &n_occupied, sizeof(int), cudaMemcpyHostToDevice));
-
-    free(hash_keys_cpu);
-    CUDA_CHECK(cudaFree(hash_keys));
-    CUDA_CHECK(cudaFree(voxels_large));
-    CUDA_CHECK(cudaFree(coords_large));
-    CUDA_CHECK(cudaFree(npts_large));
 }
