@@ -1,7 +1,11 @@
-#include "voxelize.h"
-#include <cuda_runtime.h>
-#include <cstdlib>
 #include <cstdio>
+#include <cstdlib>
+#include <cuda_runtime.h>
+#include <thrust/copy.h>
+#include <thrust/device_vector.h>
+#include <thrust/execution_policy.h>
+#include <thrust/iterator/counting_iterator.h>
+#include "voxelize.h"
 
 #define HASH_TABLE_SIZE(max_voxels) (4 * (max_voxels))
 
@@ -75,6 +79,34 @@ __global__ void voxelize_kernel(
     if (pt_idx >= max_points) return;
     for (int c = 0; c < C; c++) {
         voxels[h * max_points * C + pt_idx * C + c] = points[idx * C + c];
+    }
+}
+
+
+__global__ void compact_kernel(
+    const float* voxels_large,
+    const int* coords_large,
+    const int* npts_large,
+    float* voxels_out,
+    int* coords_out,
+    int* npts_out,
+    const int* occupied_indices,
+    int n_occupied,
+    int max_points, int C
+) {
+    int i = blockIdx.x * blockDim.x * threadIdx.x;
+    if (i >= n_occupied) return;
+
+    int slot = occupied_indices[i];
+
+    coords_out[i * 3 + 0] = coords_large[slot * 3 + 0];
+    coords_out[i * 3 + 1] = coords_large[slot * 3 + 1];
+    coords_out[i * 3 + 2] = coords_large[slot * 3 + 2];
+
+    npts_out[i] = npts_large[slot];
+
+    for (int j = 0; j < max_points * C; j++) {
+	voxels_out[i * max_points * C + j] = voxels_large[slot * max_points * C + j];
     }
 }
 
